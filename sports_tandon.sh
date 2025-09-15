@@ -1,3 +1,19 @@
+#!/bin/bash
+#SBATCH --output=jobs/Job.%j.out
+#SBATCH --error=jobs/Job.%j.err
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=64GB
+#SBATCH --account=pr_119_tandon_priority
+#SBATCH --time=30:00:00
+#SBATCH --gres=gpu:2
+#SBATCH --mail-type=ALL          
+#SBATCH --mail-user=zl4789@nyu.edu
+#SBATCH --requeue
+
+source /share/apps/anaconda3/2020.07/etc/profile.d/conda.sh;
+conda activate gram
+cd /scratch/zl4789/GRAM/command
 # GRAM sports (base config)
 SEED=2023
 
@@ -34,3 +50,7 @@ CUDA_VISIBLE_DEVICES=0,1 python ../src/main_generative_gram.py --datasets Sports
 
 
 
+
+
+
+conda deactivate
