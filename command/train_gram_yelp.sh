@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=0,1 python ../src/main_generative_gram.py --datasets Yelp \
   --cf_model sasrec \
   --id_linking 1 \
   --max_his 20 \
-  --rec_batch_size 32 \
+  --rec_batch_size 24 \
   --gradient_accumulation_steps 2 \
   --rec_lr 1e-3 \
   --rec_epochs 30 \
