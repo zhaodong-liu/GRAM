@@ -181,6 +181,7 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+# sbatch jobs results folder
 jobs/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
