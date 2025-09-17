@@ -50,6 +50,10 @@ class T5ForConditionalGeneration_GRAM(T5PreTrainedModel):
         super().__init__(config)
         self.model_dim = config.d_model
 
+        # ========== 新增：添加简化处理支持 ==========
+        self.use_simplified_fusion = getattr(config, 'simplified_metadata', False)
+        self.disable_fine_grained = getattr(config, 'disable_fine_grained_fusion', False)
+
         self.shared = nn.Embedding(config.vocab_size, config.d_model)
 
         encoder_config = copy.deepcopy(config)
@@ -72,7 +76,7 @@ class T5ForConditionalGeneration_GRAM(T5PreTrainedModel):
         # Model parallel
         self.model_parallel = False
         self.device_map = None
-
+        
     def parallelize(self, device_map=None):
         self.device_map = (
             get_device_map(len(self.encoder.block), range(torch.cuda.device_count()))

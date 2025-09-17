@@ -18,6 +18,10 @@ class GRAM(T5ForConditionalGeneration_GRAM):
         self.max_seq_len = config.max_seq_len
         self.max_item_num = config.max_item_num
 
+        # 从config或args中获取简化处理标志
+        self.use_simplified_fusion = getattr(config, 'simplified_metadata', False)
+        self.disable_fine_grained = getattr(config, 'disable_fine_grained_fusion', False)
+        
         self.use_position_embedding = config.use_position_embedding
 
         if self.use_position_embedding:
@@ -28,6 +32,13 @@ class GRAM(T5ForConditionalGeneration_GRAM):
             self.position_embedding = None
 
         self.wrap_encoder()
+        
+        if hasattr(config, 'local_rank') and (not hasattr(config, 'local_rank') or config.local_rank in [0, -1]):
+            print(f"🔧 GRAM Model initialized:")
+            print(f"   - Simplified fusion: {self.use_simplified_fusion}")
+            print(f"   - Disable fine-grained: {self.disable_fine_grained}")
+
+
 
     def init_position_embedding(self):
         nn.init.normal_(self.position_embedding.weight, std=0.02)
@@ -48,28 +59,51 @@ class GRAM(T5ForConditionalGeneration_GRAM):
     # because the T5 forward method uses the input tensors to infer
     # dimensions used in the decoder.
     # EncoderWrapper resizes the inputs as (B * N) x L.
-    def forward(self, input_ids=None, attention_mask=None, **kwargs):
-        # print(f">>> inside GRAM --- 1"); embed()
-        if input_ids != None:
-            # inputs might have already be resized in the generate method
-            if input_ids.dim() == 3:
-                self.encoder.n_passages = input_ids.size(1)
-            input_ids = input_ids.view(
-                input_ids.size(0), -1
-            )  # B x N x L -> B x (N * L)
-        if attention_mask != None:
-            attention_mask = attention_mask.view(
-                attention_mask.size(0), -1
-            )  # B x N x L -> B x (N * L)
+    def forward_(self, **kwargs):
+        """
+        条件性forward pass
+        """
+        # ========== 新增：条件性处理逻辑 ==========
+        if self.use_simplified_fusion or self.disable_fine_grained:
+            # 简化处理：对于MovieLens等简单数据集
+            return self._simplified_forward(**kwargs)
+        else:
+            # 复杂处理：保持原版行为用于Amazon数据集
+            return self._complex_forward(**kwargs)
 
-        # encoder_outputs -> beam_search()에서 forward()를 사용하기 때문에 추가
-        # if self.whole_word_type == 'none' or kwargs.get('encoder_outputs') is not None:
-        return super().forward(
-            input_ids=input_ids, attention_mask=attention_mask, **kwargs
-        )
-        # else:
-        #     raise NotImplementedError(f"whole_word_type: {self.whole_word_type} is not implemented")
+    def _simplified_forward(self, **kwargs):
+        """
+        简化的forward pass，适用于MovieLens等简单数据
+        """
+        # 简化处理：直接使用标准的forward逻辑
+        if "input_ids" in kwargs:
+            kwargs["input_ids"] = kwargs["input_ids"].view(
+                kwargs["input_ids"].size(0), -1
+            )
+        if "attention_mask" in kwargs:
+            kwargs["attention_mask"] = kwargs["attention_mask"].view(
+                kwargs["attention_mask"].size(0), -1
+            )
 
+        return super(GRAM, self).forward(**kwargs)
+
+    def _complex_forward(self, **kwargs):
+        """
+        复杂的forward pass，保持原版multi-granular late fusion逻辑
+        """
+        # 保持原来的复杂处理逻辑
+        if "input_ids" in kwargs:
+            kwargs["input_ids"] = kwargs["input_ids"].view(
+                kwargs["input_ids"].size(0), -1
+            )
+        if "attention_mask" in kwargs:
+            kwargs["attention_mask"] = kwargs["attention_mask"].view(
+                kwargs["attention_mask"].size(0), -1
+            )
+
+        return super(GRAM, self).forward(**kwargs)
+
+        
     # We need to resize the inputs here, as the generate method expect 2D tensors
     def generate(self, input_ids, attention_mask, max_length, **kwargs):
         self.encoder.n_passages = input_ids.size(1)

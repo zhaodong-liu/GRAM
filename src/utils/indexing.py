@@ -6,6 +6,12 @@ from tqdm import tqdm
 from utils import utils
 
 
+from utils.dataset_utils import detect_dataset_family
+import json
+from collections import defaultdict
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+
 def generative_indexing_id(
     data_path,
     dataset,
@@ -148,6 +154,18 @@ def gram_indexing(
         - item2input: {item_id: item_text_input} (Used for input. 'lexical_id', 'all_text', 'wo_description')
         - item2lexid: {item_id: lexical_id} (Used for target)
     """
+
+    dataset_family = detect_dataset_family(dataset)
+    
+    if dataset_family == 'MovieLens':
+        print("🎬 Using MovieLens-specific indexing...")
+        return gram_indexing_movies(data_path, dataset, model_gen, tokenizer, regenerate, phase, args, **kwargs)
+    else:
+        print("🛍️ Using Amazon-style indexing...")
+        # 保持原来的索引逻辑不变
+        return gram_indexing_original(data_path, dataset, model_gen, tokenizer, regenerate, phase, args, **kwargs)
+
+        
     user_sequence_dict, item2input, item2lexid = None, None, None
 
     user_sequence_file = os.path.join(data_path, dataset, "user_sequence.txt")

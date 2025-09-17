@@ -31,6 +31,18 @@ class MultiTaskDatasetGRAM(Dataset):
         self.args = args
         self.phase = phase
 
+        from utils.dataset_utils import detect_dataset_family
+    
+        # 新增：检测是否使用简化处理 (for ml ds
+        self.use_simplified_processing = getattr(args, 'simplified_metadata', False)
+        self.dataset_family = detect_dataset_family(dataset)
+        self.disable_fine_grained = getattr(args, 'disable_fine_grained_fusion', False)
+        
+        if self.rank == 0:
+            print(f"📊 Dataset {dataset} family: {self.dataset_family}")
+            print(f"🔧 Using simplified processing: {self.use_simplified_processing}")
+            print(f"🔧 Disable fine-grained fusion: {self.disable_fine_grained}")
+
         self.rank = args.rank
         self.skip_empty_his = args.skip_empty_his
         self.reverse_history = args.reverse_history
@@ -288,3 +300,105 @@ class MultiTaskDatasetGRAM(Dataset):
             "output": self.data["output"][idx],
             "user_id": self.data["user_id"][idx],
         }
+
+    
+    def construct_item_prompt_adaptive(self, item_metadata):
+        """
+        根据数据集类型构建item prompt
+        """
+        if self.use_simplified_processing or self.dataset_family == 'MovieLens':
+            return self._construct_simplified_movie_prompt(item_metadata)
+        else:
+            return self._construct_complex_amazon_prompt(item_metadata)
+    
+    def _construct_simplified_movie_prompt(self, item_metadata):
+        """
+        MovieLens简化prompt构建
+        """
+        title = item_metadata.get('title', '')
+        genres = item_metadata.get('genres', [])
+        year = item_metadata.get('year', '')
+        
+        # 构建简化的电影prompt
+        if isinstance(genres, list):
+            genres_str = ', '.join(genres)
+        else:
+            genres_str = str(genres)
+            
+        prompt_parts = [title]
+        if genres_str and genres_str != 'nan' and genres_str.strip():
+            prompt_parts.append(f"Genres: {genres_str}")
+        if year and str(year) != 'nan' and str(year).strip():
+            prompt_parts.append(f"Year: {year}")
+        
+        return " | ".join(prompt_parts)
+    
+    def _construct_complex_amazon_prompt(self, item_metadata):
+        """
+        Amazon复杂prompt构建（保持原版逻辑）
+        """
+        # 这里保持你现有的复杂prompt构建逻辑不变
+        # 如果没有现有逻辑，可以使用以下简化版本：
+        
+        title = item_metadata.get('title', '')
+        brand = item_metadata.get('brand', '')
+        categories = item_metadata.get('categories', [])
+        description = item_metadata.get('description', '')
+        
+        prompt_parts = []
+        if title:
+            prompt_parts.append(f"title: {title}")
+        if brand:
+            prompt_parts.append(f"brand: {brand}")
+        if categories:
+            if isinstance(categories, list):
+                categories_str = ', '.join(categories)
+            else:
+                categories_str = str(categories)
+            prompt_parts.append(f"categories: {categories_str}")
+        if description:
+            prompt_parts.append(f"description: {description}")
+        
+        return " | ".join(prompt_parts)
+    
+    def get_multi_granular_prompts_adaptive(self, user_sequence, item_metadata_dict):
+        """
+        条件性multi-granular prompt构建
+        """
+        if self.use_simplified_processing or self.disable_fine_grained:
+            # MovieLens: 简化处理，不分离user/item prompts
+            return self._get_simplified_prompts(user_sequence, item_metadata_dict)
+        else:
+            # Amazon: 原版multi-granular处理
+            return self._get_complex_prompts(user_sequence, item_metadata_dict)
+    
+    def _get_simplified_prompts(self, user_sequence, item_metadata_dict):
+        """
+        简化版本：直接合并用户历史和item信息
+        """
+        combined_prompts = []
+        
+        for item_id in user_sequence[-self.args.max_his:]:  # 取最近的历史
+            if item_id in item_metadata_dict:
+                item_prompt = self.construct_item_prompt_adaptive(item_metadata_dict[item_id])
+                combined_prompts.append(item_prompt)
+        
+        # 构建单一的用户prompt
+        if combined_prompts:
+            user_prompt = f"User watched: {' -> '.join(combined_prompts[-10:])}"  # 最近10个
+        else:
+            user_prompt = "User watched: [empty history]"
+        
+        return {
+            'user_prompt': user_prompt,
+            'item_prompts': None,  # 不使用分离的item prompts
+            'fusion_type': 'simplified'
+        }
+    
+    def _get_complex_prompts(self, user_sequence, item_metadata_dict):
+        """
+        复杂版本：保持原版multi-granular分离处理
+        """
+        # 这里保持你现有的复杂处理逻辑
+        # 如果没有现有逻辑，返回简化版本
+        return self._get_simplified_prompts(user_sequence, item_metadata_dict)

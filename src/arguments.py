@@ -279,11 +279,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Use position embedding",
     )
     parser.add_argument(
-        "--item_prompt",
-        type=str,
+        "--item_prompt", 
+        type=str, 
         default="all_text",
-        help="Information used for fine-grained item prompts",
+        help="Item prompt type: all_text (Amazon), simplified_text (MovieLens), or metadata_only"
     )
+    
     parser.add_argument(
         "--cf_model", type=str, default="sasrec", help="Model to use for CF"
     )
@@ -320,6 +321,42 @@ def create_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="Whether to append lexical id to the history sequence",
+    )
+
+    # 新增：MovieLens适配参数
+    parser.add_argument(
+        "--simplified_metadata", 
+        type=int, 
+        default=0,
+        help="Use simplified metadata processing for datasets like MovieLens (0/1)"
+    )
+    
+    parser.add_argument(
+        "--disable_fine_grained_fusion", 
+        type=int, 
+        default=0,
+        help="Disable fine-grained fusion for simple metadata datasets (0/1)"
+    )
+    
+    parser.add_argument(
+        "--dataset_family", 
+        type=str, 
+        default="auto",
+        help="Dataset family: Amazon, MovieLens, or auto-detect"
+    )
+    
+    parser.add_argument(
+        "--hierarchical_clusters", 
+        type=int, 
+        default=128,
+        help="Number of clusters for hierarchical indexing"
+    )
+    
+    parser.add_argument(
+        "--hierarchical_depth", 
+        type=int, 
+        default=3,
+        help="Depth of hierarchical clustering"
     )
     return parser
 

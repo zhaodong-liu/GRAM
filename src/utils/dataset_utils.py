@@ -177,3 +177,81 @@ def get_loader(args, tokenizer, TrainSetID, TrainSetRec, ValidSet, rank=0):
     valid_loader = None
 
     return train_loader_id, train_loader_rec, valid_loader
+
+
+# for adding ml ds
+
+def detect_dataset_family(dataset_name):
+    """
+    自动检测数据集类型并返回相应配置
+    """
+    amazon_datasets = ['Beauty', 'Toys', 'Sports', 'Books', 'Electronics']
+    movielens_datasets = ['ML32M', 'ML1M', 'ML10M', 'ML100K', 'MovieLens']
+    
+    if dataset_name in amazon_datasets:
+        return 'Amazon'
+    elif dataset_name in movielens_datasets or 'ML' in dataset_name:
+        return 'MovieLens'
+    elif dataset_name in ['Yelp']:
+        return 'Other'
+    else:
+        return 'Unknown'
+
+def get_dataset_config(dataset_name):
+    """
+    根据数据集返回特定配置
+    """
+    family = detect_dataset_family(dataset_name)
+    
+    config = {
+        'Amazon': {
+            'simplified_metadata': False,
+            'item_prompt_max_len': 128,
+            'max_his': 20,
+            'disable_fine_grained_fusion': False,
+            'item_prompt_type': 'all_text',
+            'rec_epochs': 30,
+            'hierarchical_clusters': 128,
+            'num_cf': 10
+        },
+        'MovieLens': {
+            'simplified_metadata': True,
+            'item_prompt_max_len': 64,
+            'max_his': 30,
+            'disable_fine_grained_fusion': True,
+            'item_prompt_type': 'simplified_text',
+            'rec_epochs': 20,
+            'hierarchical_clusters': 128,
+            'num_cf': 5
+        },
+        'Other': {
+            'simplified_metadata': False,
+            'item_prompt_max_len': 128,
+            'max_his': 20,
+            'disable_fine_grained_fusion': False,
+            'item_prompt_type': 'all_text',
+            'rec_epochs': 30,
+            'hierarchical_clusters': 128,
+            'num_cf': 10
+        }
+    }
+    
+    return config.get(family, config['Other'])
+
+def apply_dataset_specific_args(args):
+    """
+    根据数据集自动调整参数
+    """
+    if args.dataset_family == "auto":
+        config = get_dataset_config(args.datasets)
+        
+        # 只在用户没有手动设置时应用自动配置
+        for key, value in config.items():
+            if hasattr(args, key) and getattr(args, key) == parser.get_default(key):
+                setattr(args, key, value)
+        
+        family = detect_dataset_family(args.datasets)
+        print(f"🎯 Auto-detected dataset family for {args.datasets}: {family}")
+        print(f"📋 Applied configuration: {config}")
+    
+    return args
